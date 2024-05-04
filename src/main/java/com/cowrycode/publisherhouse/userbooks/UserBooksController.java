@@ -1,5 +1,9 @@
 package com.cowrycode.publisherhouse.userbooks;
 
+import com.cowrycode.publisherhouse.book.BookObject;
+import com.cowrycode.publisherhouse.book.BookRepository;
+import com.cowrycode.publisherhouse.user.BooksByUser;
+import com.cowrycode.publisherhouse.user.BooksByUserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
@@ -10,12 +14,18 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.servlet.ModelAndView;
 
 import java.time.LocalDate;
+import java.util.Optional;
 
 @Controller
 public class UserBooksController {
 
     @Autowired
     UserBooksRepository userBooksRepository;
+
+    @Autowired
+    BooksByUserRepository booksByUserRepository;
+    @Autowired
+    BookRepository bookRepository;
 
     @PostMapping("/addUserBook")
     public ModelAndView addBookForUser(@RequestBody MultiValueMap<String, String> formData,
@@ -24,22 +34,48 @@ public class UserBooksController {
         if(principal == null || principal.getAttribute("login") == null){
             return null;
         }
+
+        String bookId = formData.getFirst("bookId");
+        Optional<BookObject> optionalBook = bookRepository.findById(bookId);
+        if (!optionalBook.isPresent()) {
+            return new ModelAndView("redirect:/");
+        }
+        BookObject book = optionalBook.get();
+
+
         UserBooks userBooks = new UserBooks();
         UserBooksPrimaryKey key = new UserBooksPrimaryKey();
 
-        key.setUserId(principal.getAttribute("login"));
-        String bookId = formData.getFirst("bookId");
+
+        String userId = principal.getAttribute("login");
+        //String bookId = formData.getFirst("bookId");
         key.setBookId(bookId);
+        key.setUserId(userId);
 
         userBooks.setKey(key);
 
+        int rating = Integer.parseInt(formData.getFirst("rating"));
+
         userBooks.setStartedDate(LocalDate.parse(formData.getFirst("startDate")));
         userBooks.setCompletedDate(LocalDate.parse(formData.getFirst("completedDate")));
-        userBooks.setRating(Integer.parseInt(formData.getFirst("rating")));
+        //userBooks.setRating(Integer.parseInt(formData.getFirst("rating")));
+        userBooks.setRating(rating);
         userBooks.setReadingStatus(formData.getFirst("readingStatus"));
 
         userBooksRepository.save(userBooks);
         
+
+
+        BooksByUser booksByUser = new BooksByUser();
+        booksByUser.setId(userId);
+        booksByUser.setBookId(bookId);
+        booksByUser.setBookName(book.getName());
+        booksByUser.setCoverIds(book.getCoverIds());
+        booksByUser.setAuthorNames(book.getAuthorNames());
+        booksByUser.setReadingStatus(formData.getFirst("readingStatus"));
+        booksByUser.setRating(rating);
+        booksByUserRepository.save(booksByUser);
+
         return new ModelAndView("redirect:/books/" + bookId);
     }
 }
